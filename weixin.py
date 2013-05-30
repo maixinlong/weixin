@@ -1,9 +1,17 @@
 # coding=utf-8
 from django.http import HttpResponse
-import hashlib, time, re
+import hashlib, time, re, sys
 from xml.etree import ElementTree as ET
+from farm_lib.common.utils import cache
+import weather
+import wea
+import baidu
+reload(sys)
+sys.setdefaultencoding('utf-8')
       
 def weixin(request):
+        print time.time()
+        print '-come in--------'
         token = "maixinlong"
         params = request.GET
         args = [token, params['timestamp'], params['nonce']]
@@ -27,8 +35,38 @@ def weixin(request):
                         return HttpResponse(reply % (toUserName, fromUserName, postTime, "输入点命令吧..."))
                     if content == "Hello2BizUser":
                         return HttpResponse(reply % (toUserName, fromUserName, postTime, "查询成绩绩点请到http://chajidian.sinaapp.com/ 本微信更多功能开发中..."))
+                    elif content == "天气":
+                        try:
+                            city = 'beijing'
+                            if cache.get('weather_msg'):
+                                weather_msg = cache.get('weather_msg')
+                                print 'cache get'
+                            else:
+                                weather_msg = wea.get_weather_by_city(city)
+                                cache.set('weather_msg',weather_msg,60*60*3)
+                                print 'cache set.......'
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, weather_msg))
+                        except Exception,e:
+                            print 'weixin err',e
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, '天气功能开发中...'))
+                    elif content == "实时天气":
+                        try:
+                            temp_list = []
+                            weather_msg = weather.main()
+                            for k,v in weather_msg.items():
+                                temp_list.append(k)
+                                temp_list.append(v)
+                            weather_msg = ''.join(temp_list)
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, weather_msg))
+                        except:
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, '天气功能开发中....'))
                     else:
-                        return HttpResponse(reply % (toUserName, fromUserName, postTime, "暂不支持任何命令交互哦,功能开发中..."))
+                        try:
+                            rclist = baidu.baidu_search(content)
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, rclist))
+                        except Exception,e:
+                            return HttpResponse(reply % (toUserName, fromUserName, postTime, e))
+                            #return HttpResponse(reply % (toUserName, fromUserName, postTime, "目前只支持查询天气哦（直接输入天气两字）,更多：功能开发中...i"))
                     
                 else:
                     return HttpResponse("Invalid Request")
